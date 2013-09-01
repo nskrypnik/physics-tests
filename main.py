@@ -9,7 +9,7 @@ from kivy.uix.scatter import ScatterPlane
 from kivy.graphics import Color, Rectangle, Ellipse
 
 
-GRAVITY = 0, -100
+GRAVITY = 0, 0
 
 Builder.load_string('''
 #place kivy notation of app here
@@ -33,11 +33,10 @@ class PhysicalObject(GraphicalObject):
         super(PhysicalObject, self).__init__(**kw)
         self.world = world
         self.mass = mass
-        self.elasticity = kw.pop('elasticity', 0.)
-        moment = self.get_moment()
-        self.body = body = phy.Body(mass, moment)
-        body.position = pos
         self.pos = pos
+        self.elasticity = kw.pop('elasticity', 0.)
+        self.moment = self.get_moment()
+        self.body = body = self.body_factory()     
         shapes = self.create_shapes(**kw)
         if isinstance(shapes, list):
             self.world.space.add(*shapes)
@@ -46,6 +45,12 @@ class PhysicalObject(GraphicalObject):
         body.data = self
         self.world.objects.append(self)
         self.world.add_widget(self.widget)
+        
+    def body_factory(self):
+        body = phy.Body(self.mass, self.moment)
+        body.position = self.pos
+        self.world.space.add(body)
+        return body
 
     def update(self):
         ''' Should be implemented in subclass '''
@@ -128,7 +133,11 @@ class StaticBox(PhysicalObject):
         return None
         
     def create_widget(self):
-        return Widget(size=self.size)
+        widget = Widget(size=self.size)
+        with widget.canvas:
+            Color(*self.color)
+            Rectangle(pos=(0, 0), size=self.size)
+        return widget
     
     def update(self):
         p = self.body.position
@@ -136,9 +145,12 @@ class StaticBox(PhysicalObject):
 
     def create_shapes(self, **kw):
         size = self.size
-        shape = phy.Poly.create_box(self.body, size[0], size[1])
+        shape = phy.Poly.create_box(self.body, size=self.size)
         shape.elasticity = self.elasticity
         return shape
+        
+    def body_factory(self):
+        return self.world.space.static_body
 
 
 class PlayGround(Widget):
@@ -204,6 +216,7 @@ class PlayGround(Widget):
         Box(self, 10000., pos=(250, 500), size=(50, 100), color=(1, 0, 1, 1))
         Circle(self, 10000., pos=(100, 300), radius=30, color=(1, 0.5, 0.5, 1), elasticity=1.0)
         Circle(self, 10000., pos=(200, 500), radius=50, color=(0, 1, 0.5, 1))
+        #StaticBox(self, pos=(100, 300), size=(200., 100.))
 
 class PhysicsApp(App):
     
